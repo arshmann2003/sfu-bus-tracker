@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VanBus — Metro Vancouver reliability</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7385; --line: #e3e6ec;
+    --red: #a6192e; --sched: #3b6fd8; --freq: #8a4fd8; --good: #1f9d55; --warn: #d89b1f; --bad: #d8452f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  a { color: inherit; text-decoration: none; }
+  .demo-banner { background: #fff4d6; color: #7a5a00; text-align: center; font-size: 13px; padding: 6px; border-bottom: 1px solid #f0dfa8; }
+  header { background: var(--red); color: #fff; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  header .brand { font-weight: 700; font-size: 18px; letter-spacing: -.02em; }
+  header .brand span { font-weight: 500; opacity: .75; font-size: 13px; margin-left: 8px; }
+  header nav a { margin-left: 18px; opacity: .85; }
+  header nav a.active, header nav a:hover { opacity: 1; text-decoration: underline; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+  main { padding: 28px 0 56px; }
+  h1 { font-size: 28px; margin: 0 0 6px; }
+  h2 { font-size: 18px; margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #fff0c2; color: #7a5a00; margin-left: 6px; vertical-align: middle; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: #eef0f4; color: var(--muted); margin-left: 4px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; transition: box-shadow .15s, transform .15s; }
+  a.card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-2px); }
+  .route-chip { display: inline-block; font-weight: 800; font-size: 18px; padding: 2px 9px; border-radius: 6px; color: #fff; background: var(--sched); }
+  .route-chip.freq { background: var(--freq); }
+  .card .ends { color: var(--muted); font-size: 12px; margin: 6px 0 10px; min-height: 32px; }
+  .big { font-size: 24px; font-weight: 700; line-height: 1.1; }
+  .big small { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .kv { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .kv b { color: var(--text); }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-top: 16px; }
+  .callout { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  .status { color: var(--muted); font-size: 14px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--good); margin-left: 4px; animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  select, input[type=search], input[type=time], input[type=text] { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  input[type=search] { min-width: 240px; flex: 1; }
+  button, .btn { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: var(--red); color: #fff; cursor: pointer; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; margin-top: 16px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .stat .value { font-size: 24px; font-weight: 700; margin-top: 2px; }
+  .stat .note { color: var(--muted); font-size: 12px; }
+  .legend { display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  svg text { font-size: 11px; fill: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 800px) { .grid2, .grid3 { grid-template-columns: 1fr; } header nav a { margin-left: 12px; font-size: 14px; } header .brand span { display: none; } }
+  .back { color: var(--muted); font-size: 14px; }
+  .about p, .about li { max-width: 760px; }
+  code { background: #eef0f4; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+  .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff; cursor: pointer; font: inherit; color: var(--text); }
+  .chip.on { background: var(--red); color: #fff; border-color: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  td { padding: 9px 6px; border-bottom: 1px solid #f0f1f4; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: #f8f9fb; }
+  .map-wrap { position: relative; background: #e8eef5; border-radius: 12px; overflow: hidden; min-height: 480px; }
+  .map-wrap svg { width: 100%; height: auto; display: block; }
+  .bus { cursor: pointer; }
+  .bus:hover circle { stroke-width: 3; }
+  .map-legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 10px; flex-wrap: wrap; }
+  .plan-result { font-size: 18px; margin: 8px 0 0; }
+  .muted { color: var(--muted); }
+  .rank { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="demo-banner">Completed-product mock: every number here is generated fake data, not real TransLink observations.</div>
+<header>
+  <div class="wrap">
+    <a class="brand" href="#/">VanBus<span>Metro Vancouver reliability</span></a>
+    <nav>
+      <a href="#/" data-nav="home">Routes</a>
+      <a href="#/plan" data-nav="plan">Plan</a>
+      <a href="#/live" data-nav="live">Live</a>
+      <a href="#/about" data-nav="about">About</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="app"></main>
+
+<script>
+// Pretend the finished product has been collecting since spring.
+const DAYS_COLLECTED = 184;
+const REGIONAL_MEDIAN_ON_TIME = 78;
+const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
+
+const ROUTES = [
+  { id: "R1", long: "King George Blvd RapidBus", a: "Newton Exchange", b: "Guildford Exchange", tags: ["rapid","surrey"], xy: [[760,340],[820,250]], base: 0.9, peak: 2.2, ghost: 0.2, cancel: 0.06, gap: h => h < 6 || h > 21 ? 15 : 8, stops: ["Newton Exchange","King George & 88 Ave","Surrey Central","King George & 104","Guildford Exchange"] },
+  { id: "R2", long: "Marine Dr RapidBus", a: "Park Royal", b: "Phibbs Exchange", tags: ["rapid","north"], xy: [[210,130],[340,115]], base: 1.1, peak: 2.4, ghost: 0.22, cancel: 0.05, gap: h => h < 6 || h > 21 ? 15 : 8, stops: ["Park Royal","Marine & Capilano","Lonsdale Quay","Marine & Brooksbank","Phibbs Exchange"] },
+  { id: "R3", long: "Lougheed Hwy RapidBus", a: "Coquitlam Central", b: "Haney Place", tags: ["rapid","tri"], xy: [[620,190],[780,175]], base: 1.2, peak: 2.8, ghost: 0.28, cancel: 0.07, gap: h => h < 6 || h > 21 ? 20 : 10, stops: ["Coquitlam Central","Lougheed & Westwood","Port Haney","Haney Place"] },
+  { id: "R4", long: "41st Ave RapidBus", a: "Joyce-Collingwood", b: "UBC", tags: ["rapid","ubc","van"], xy: [[400,310],[160,300]], base: 1.0, peak: 3.1, ghost: 0.18, cancel: 0.05, gap: h => h < 6 || h > 22 ? 12 : 6, stops: ["Joyce-Collingwood","41st & Knight","41st & Cambie","41st & Granville","Dunbar Loop","UBC Exchange"] },
+  { id: "R5", long: "Hastings St RapidBus", a: "Burrard Stn", b: "SFU", tags: ["rapid","sfu","van"], xy: [[220,200],[700,95]], base: 1.0, peak: 2.6, ghost: 0.25, cancel: 0.08, gap: h => h < 6 ? 15 : h < 20 ? 6 : h < 22 ? 10 : 15, stops: ["Burrard Stn","Hastings & Main","Hastings & Commercial","Kootenay Loop","Hastings & Willingdon","SFU Exchange"] },
+  { id: "R6", long: "Scott Rd RapidBus", a: "Scott Rd Stn", b: "Newton Exchange", tags: ["rapid","surrey"], xy: [[700,300],[770,360]], base: 1.1, peak: 2.5, ghost: 0.24, cancel: 0.06, gap: h => h < 6 || h > 21 ? 15 : 8, stops: ["Scott Rd Stn","Scott & 96 Ave","Scott & 80 Ave","Newton Exchange"] },
+  { id: "99", long: "Commercial-Broadway / UBC B-Line", a: "Commercial-Broadway", b: "UBC", tags: ["ubc","van"], xy: [[360,250],[155,275]], base: 1.3, peak: 3.8, ghost: 0.15, cancel: 0.04, gap: h => h < 6 || h > 22 ? 10 : 4, stops: ["Commercial-Broadway","Broadway & Main","Broadway-City Hall","Broadway & Granville","Alma","UBC Exchange"] },
+  { id: "9", long: "Boundary / Alma / UBC", a: "Boundary Loop", b: "UBC", tags: ["ubc","van"], xy: [[430,245],[160,270]], base: 1.4, peak: 3.0, ghost: 0.3, cancel: 0.07, gap: h => (h >= 7 && h < 19) ? 8 : 15, stops: ["Boundary Loop","Broadway & Commercial","Broadway & Cambie","Broadway & Granville","Alma","UBC Exchange"] },
+  { id: "14", long: "Hastings / UBC", a: "Downtown", b: "UBC", tags: ["ubc","van"], xy: [[230,205],[155,265]], base: 1.5, peak: 3.2, ghost: 0.32, cancel: 0.08, gap: h => (h >= 7 && h < 19) ? 10 : 20, stops: ["Hastings & Granville","Granville & Broadway","Granville & 16th","Dunbar & 41st","UBC Exchange"] },
+  { id: "25", long: "Brentwood / UBC", a: "Brentwood Stn", b: "UBC", tags: ["ubc","burnaby"], xy: [[520,235],[165,280]], base: 1.6, peak: 3.4, ghost: 0.35, cancel: 0.09, gap: h => (h >= 7 && h < 18) ? 10 : 20, stops: ["Brentwood Stn","Nanaimo & 29th","King Edward & Knight","King Edward & Cambie","UBC Exchange"] },
+  { id: "41", long: "Joyce Stn / UBC", a: "Joyce-Collingwood", b: "UBC", tags: ["ubc","van"], xy: [[410,305],[160,295]], base: 1.4, peak: 3.3, ghost: 0.28, cancel: 0.07, gap: h => (h >= 7 && h < 19) ? 8 : 15, stops: ["Joyce-Collingwood","41st & Knight","41st & Cambie","41st & Granville","UBC Exchange"] },
+  { id: "49", long: "Metrotown / UBC", a: "Metrotown Stn", b: "UBC", tags: ["ubc","burnaby"], xy: [[500,320],[165,305]], base: 1.5, peak: 3.5, ghost: 0.3, cancel: 0.08, gap: h => (h >= 7 && h < 19) ? 8 : 16, stops: ["Metrotown Stn","49th & Knight","49th & Cambie","49th & Granville","UBC Exchange"] },
+  { id: "145", long: "Production Way / SFU", a: "Production Way Stn", b: "SFU", tags: ["sfu","burnaby"], xy: [[560,210],[700,90]], base: 1.6, peak: 4.2, ghost: 0.6, cancel: 0.12, gap: h => (h >= 7 && h < 10) || (h >= 15 && h < 18) ? 7 : h < 20 ? 12 : 20, stops: ["Production Way-University Stn","Gaglardi Way & Lougheed","Gaglardi Way & Broadway","University Dr & Tower Rd","SFU Exchange"] },
+  { id: "144", long: "Metrotown / SFU", a: "Metrotown Stn", b: "SFU", tags: ["sfu","burnaby"], xy: [[500,315],[695,100]], base: 1.3, peak: 3.0, ghost: 0.3, cancel: 0.05, gap: h => (h >= 7 && h < 10) || (h >= 15 && h < 18) ? 10 : h < 21 ? 15 : 30, stops: ["Metrotown Stn","Royal Oak & Kingsway","Sperling-Burnaby Lake Stn","Curtis & Duthie","SFU Exchange"] },
+  { id: "143", long: "Burquitlam / SFU", a: "Burquitlam Stn", b: "SFU", tags: ["sfu","tri"], xy: [[600,175],[705,88]], base: 1.9, peak: 3.6, ghost: 0.5, cancel: 0.1, gap: h => (h >= 7 && h < 10) || (h >= 15 && h < 18) ? 12 : h < 20 ? 20 : 30, stops: ["Burquitlam Stn","Clarke Rd & Cottonwood","Gaglardi Way & Burnaby Mtn Pkwy","SFU Exchange"] },
+  { id: "135", long: "Burrard Stn / SFU", a: "Burrard Stn", b: "SFU", tags: ["sfu","van"], xy: [[225,208],[690,108]], base: 1.5, peak: 3.2, ghost: 0.35, cancel: 0.06, gap: h => h < 7 ? 20 : h < 19 ? 15 : 30, stops: ["Burrard Stn","Hastings & Main","Kootenay Loop","Hastings & Willingdon","SFU Exchange"] },
+  { id: "3", long: "Main / Terminal", a: "Main St-Science World", b: "Downtown", tags: ["van"], xy: [[300,260],[235,195]], base: 1.2, peak: 2.8, ghost: 0.2, cancel: 0.05, gap: h => (h >= 7 && h < 19) ? 8 : 15, stops: ["Main St-Science World","Main & Broadway","Main & Kingsway","Hastings & Main","Waterfront"] },
+  { id: "8", long: "Fraser", a: "Fraser & Marine", b: "Downtown", tags: ["van"], xy: [[330,350],[240,198]], base: 1.4, peak: 3.1, ghost: 0.28, cancel: 0.07, gap: h => (h >= 7 && h < 19) ? 8 : 16, stops: ["Fraser & Marine","Fraser & 49th","Fraser & Broadway","Main & Hastings","Waterfront"] },
+  { id: "10", long: "Granville", a: "Granville & Marine", b: "Waterfront", tags: ["van"], xy: [[210,340],[230,185]], base: 1.3, peak: 3.0, ghost: 0.22, cancel: 0.06, gap: h => (h >= 7 && h < 20) ? 7 : 12, stops: ["Marine Drive Stn","Granville & 41st","Granville & Broadway","Granville & Georgia","Waterfront"] },
+  { id: "16", long: "29th Ave / Arbutus", a: "29th Avenue Stn", b: "Arbutus", tags: ["van"], xy: [[400,280],[190,270]], base: 1.5, peak: 2.9, ghost: 0.3, cancel: 0.07, gap: h => (h >= 7 && h < 19) ? 10 : 20, stops: ["29th Avenue Stn","Kingsway & Knight","Broadway & Cambie","Broadway & Granville","Arbutus"] },
+  { id: "20", long: "Victoria / Downtown", a: "Victoria & 54th", b: "Downtown", tags: ["van"], xy: [[360,360],[240,192]], base: 1.4, peak: 3.2, ghost: 0.26, cancel: 0.06, gap: h => (h >= 7 && h < 19) ? 8 : 15, stops: ["Victoria & 54th","Victoria & 41st","Victoria & Broadway","Hastings & Victoria","Waterfront"] },
+  { id: "22", long: "Knight / Downtown", a: "Knight & Marine", b: "Downtown", tags: ["van"], xy: [[350,370],[245,200]], base: 1.6, peak: 3.4, ghost: 0.34, cancel: 0.08, gap: h => (h >= 7 && h < 19) ? 9 : 18, stops: ["Knight & Marine","Knight & 49th","Knight & Broadway","Main & Terminal","Waterfront"] },
+  { id: "130", long: "Metrotown / Kootenay", a: "Metrotown Stn", b: "Kootenay Loop", tags: ["burnaby"], xy: [[500,318],[480,185]], base: 1.4, peak: 2.7, ghost: 0.28, cancel: 0.06, gap: h => (h >= 7 && h < 19) ? 10 : 20, stops: ["Metrotown Stn","Willingdon & Kingsway","Brentwood Stn","Hastings & Willingdon","Kootenay Loop"] },
+  { id: "160", long: "Port Coquitlam / Vancouver", a: "Port Coquitlam Stn", b: "Kootenay Loop", tags: ["tri"], xy: [[680,185],[470,190]], base: 1.8, peak: 3.6, ghost: 0.4, cancel: 0.1, gap: h => (h >= 6 && h < 20) ? 15 : 30, stops: ["Port Coquitlam Stn","Coquitlam Central","Lougheed Town Centre","Kootenay Loop"] },
+  { id: "319", long: "Scott Rd / Newton", a: "Scott Rd Stn", b: "Newton Exchange", tags: ["surrey"], xy: [[705,305],[775,355]], base: 1.3, peak: 2.9, ghost: 0.3, cancel: 0.07, gap: h => (h >= 6 && h < 21) ? 10 : 20, stops: ["Scott Rd Stn","120 St & 96 Ave","120 St & 80 Ave","Newton Exchange"] },
+  { id: "351", long: "Crescent Beach / Bridgeport", a: "Crescent Beach", b: "Bridgeport Stn", tags: ["south"], xy: [[720,450],[480,390]], base: 1.7, peak: 3.0, ghost: 0.22, cancel: 0.05, gap: h => (h >= 6 && h < 20) ? 20 : 40, stops: ["Crescent Beach","White Rock Centre","152 St & 24 Ave","Bridgeport Stn"] },
+  { id: "410", long: "Railway / 22nd St", a: "Railway & 22nd", b: "22nd Street Stn", tags: ["south"], xy: [[400,430],[560,360]], base: 1.5, peak: 2.8, ghost: 0.25, cancel: 0.06, gap: h => (h >= 6 && h < 20) ? 12 : 25, stops: ["Railway & Steveston","No. 3 & Granville","Richmond-Brighouse","22nd Street Stn"] },
+  { id: "501", long: "Langley Centre / Surrey Central", a: "Langley Centre", b: "Surrey Central", tags: ["surrey"], xy: [[880,390],[790,290]], base: 1.8, peak: 3.5, ghost: 0.38, cancel: 0.09, gap: h => (h >= 6 && h < 20) ? 15 : 30, stops: ["Langley Centre","200 St & 64 Ave","Fraser Hwy & 168","Surrey Central"] },
+  { id: "N8", long: "Fraser NightBus", a: "Downtown", b: "Fraser & Marine", tags: ["night","van"], xy: [[235,198],[335,355]], base: 2.2, peak: 1.4, ghost: 0.7, cancel: 0.15, gap: h => 30, stops: ["Granville & Georgia","Main & Broadway","Fraser & 41st","Fraser & Marine"] },
+  { id: "N19", long: "Surrey Central NightBus", a: "Downtown", b: "Surrey Central", tags: ["night","surrey"], xy: [[235,202],[790,285]], base: 2.4, peak: 1.2, ghost: 0.8, cancel: 0.18, gap: h => 30, stops: ["Granville & Georgia","Kingsway & Joyce","New Westminster Stn","Surrey Central"] },
+];
+
+const FOCI = [
+  { id: "all", label: "All routes" },
+  { id: "rapid", label: "RapidBus" },
+  { id: "sfu", label: "SFU" },
+  { id: "ubc", label: "UBC" },
+  { id: "van", label: "Vancouver" },
+  { id: "night", label: "NightBus" },
+];
+
+const routeById = id => ROUTES.find(r => r.id === id);
+const ends = r => `${r.a} ⇄ ${r.b}`;
+
+function mulberry32(seed) {
+  return () => {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function rngFor(...parts) {
+  let h = 2166136261;
+  for (const c of parts.join("|")) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return mulberry32(h);
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function peakFactor(h, dir) {
+  const am = Math.exp(-((h - 8.5) ** 2) / 1.5) * (dir === "in" ? 1 : 0.45);
+  const pm = Math.exp(-((h - 17) ** 2) / 2) * (dir === "out" ? 1 : 0.55);
+  return am + pm;
+}
+
+function hourly(route, dir, days) {
+  const rng = rngFor(route.id, dir, days);
+  const noiseScale = days < 10 ? 1.6 : 1;
+  const noise = s => (rng() - 0.5) * s * noiseScale;
+  return HOURS.map(h => {
+    const gap = route.gap(h);
+    const frequent = gap <= 10;
+    const p = peakFactor(h, dir);
+    const delay = Math.max(0, route.base + p * route.peak + noise(0.9));
+    const onTime = clamp(95 - delay * 7 + noise(6), 25, 99);
+    const excessWait = Math.max(0.2, 0.4 + p * route.peak * 0.6 + noise(0.6));
+    const regularity = clamp(88 - excessWait * 11 + noise(6), 20, 98);
+    const trips = Math.round((60 / gap) * days * 0.85);
+    const bunching = Math.round(trips * (frequent ? 0.02 + p * 0.06 : 0.004 + p * 0.01));
+    return { h, gap, frequent, delay, onTime, excessWait, regularity, trips, bunching };
+  });
+}
+
+function summary(route, dir, days) {
+  const hrs = hourly(route, dir, days);
+  const rng = rngFor("sum", route.id, dir, days);
+  const sched = hrs.filter(x => !x.frequent), freq = hrs.filter(x => x.frequent);
+  const wavg = (rows, key) => rows.reduce((a, x) => a + x[key] * x.trips, 0) / Math.max(1, rows.reduce((a, x) => a + x.trips, 0));
+  const totalTrips = hrs.reduce((a, x) => a + x.trips, 0);
+  const freqShare = freq.reduce((a, x) => a + x.trips, 0) / Math.max(1, totalTrips);
+  const avgDelay = wavg(hrs, "delay");
+  return {
+    hrs,
+    headline: freqShare > 0.5 ? "frequent" : "scheduled",
+    onTime: sched.length ? wavg(sched, "onTime") : wavg(hrs, "onTime"),
+    avgDelay,
+    p90: avgDelay * 2.2 + 2 + rng(),
+    excessWait: freq.length ? wavg(freq, "excessWait") : null,
+    regularity: freq.length ? wavg(freq, "regularity") : null,
+    ghosts: Math.round(days * route.ghost * (0.7 + rng() * 0.6)),
+    cancelled: Math.round(days * route.cancel * (0.5 + rng())),
+    bunching: hrs.reduce((a, x) => a + x.bunching, 0),
+    trips: totalTrips,
+    arrivals: totalTrips * route.stops.length,
+    coverage: 98.4 + rng() * 1.3,
+    rainOnTime: clamp((sched.length ? wavg(sched, "onTime") : wavg(hrs, "onTime")) - 6 - rng() * 3, 30, 95),
+  };
+}
+
+function bothWays(route, days) {
+  const inn = summary(route, "in", days);
+  const out = summary(route, "out", days);
+  return { in: inn, out, arrivals: inn.arrivals + out.arrivals, onTime: (inn.onTime + out.onTime) / 2, avgDelay: (inn.avgDelay + out.avgDelay) / 2, ghosts: inn.ghosts + out.ghosts, cancelled: inn.cancelled + out.cancelled };
+}
+
+function stopDelays(route, dir, days) {
+  const rng = rngFor("stops", route.id, dir, days);
+  const stops = dir === "in" ? route.stops : [...route.stops].reverse();
+  let d = route.base * 0.3;
+  return stops.map((name, i) => {
+    if (i > 0) d += (route.base * 1.8) / (stops.length - 1) + (rng() - 0.35) * 0.6;
+    return { name, delay: Math.max(0, d) };
+  });
+}
+
+const cache = new Map();
+function cached(r, days) {
+  const k = r.id + ":" + days;
+  if (!cache.has(k)) cache.set(k, bothWays(r, days));
+  return cache.get(k);
+}
+
+const fmtMin = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "m";
+const fmtHour = h => { const hh = h % 12 || 12; return hh + (h < 12 || h === 24 ? " AM" : " PM"); };
+const dirLabel = (r, d) => d === "in" ? `Toward ${r.a}` : `Toward ${r.b}`;
+const dirPhrase = (r, d) => d === "in" ? `toward ${r.a}` : `toward ${r.b}`;
+const earlyBadge = days => days < 10 ? `<span class="badge">early data</span>` : "";
+const pctClass = v => v >= 80 ? "var(--good)" : v >= 70 ? "var(--warn)" : "var(--bad)";
+
+function hourlyChart(hrs) {
+  const W = 940, H = 260, L = 40, R = 10, T = 14, B = 30;
+  const vals = hrs.map(x => x.frequent ? x.excessWait : x.delay);
+  const max = Math.max(1, Math.ceil(Math.max(...vals) + 0.5));
+  const bw = (W - L - R) / hrs.length;
+  const y = v => T + (H - T - B) * (1 - v / max);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  for (let g = 0; g <= max; g++) s += `<line x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}" stroke="#eceef2"/><text x="${L - 6}" y="${y(g) + 4}" text-anchor="end">${g}m</text>`;
+  hrs.forEach((x, i) => {
+    const v = vals[i], bx = L + i * bw + bw * 0.15;
+    const tip = x.frequent
+      ? `${fmtHour(x.h)} · frequent (every ${x.gap} min)\nExcess wait ${x.excessWait.toFixed(1)} min · ${x.regularity.toFixed(0)}% evenly spaced`
+      : `${fmtHour(x.h)} · scheduled (every ${x.gap} min)\nAvg delay ${fmtMin(x.delay)} · ${x.onTime.toFixed(0)}% on time`;
+    s += `<rect x="${bx}" y="${y(v)}" width="${bw * 0.7}" height="${y(0) - y(v)}" rx="3" fill="${x.frequent ? "var(--freq)" : "var(--sched)"}"><title>${tip}</title></rect>`;
+    if (i % 2 === 0) s += `<text x="${bx + bw * 0.35}" y="${H - 10}" text-anchor="middle">${fmtHour(x.h)}</text>`;
+  });
+  return s + `</svg>`;
+}
+
+function stopChart(stops) {
+  const W = 460, H = 280, L = 40, R = 90, T = 14, B = 110;
+  const max = Math.max(1, Math.ceil(Math.max(...stops.map(s => s.delay)) + 0.5));
+  const x = i => L + (W - L - R) * (stops.length === 1 ? 0.5 : i / (stops.length - 1));
+  const y = v => T + (H - T - B) * (1 - v / max);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  for (let g = 0; g <= max; g++) s += `<line x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}" stroke="#eceef2"/><text x="${L - 6}" y="${y(g) + 4}" text-anchor="end">${g}m</text>`;
+  s += `<polyline fill="none" stroke="var(--red)" stroke-width="2.5" points="${stops.map((st, i) => `${x(i)},${y(st.delay)}`).join(" ")}"/>`;
+  stops.forEach((st, i) => {
+    s += `<circle cx="${x(i)}" cy="${y(st.delay)}" r="4" fill="#fff" stroke="var(--red)" stroke-width="2"><title>${st.name}: ${fmtMin(st.delay)}</title></circle>`;
+    s += `<text transform="translate(${x(i) + 3},${H - B + 14}) rotate(40)">${st.name.length > 22 ? st.name.slice(0, 21) + "…" : st.name}</text>`;
+  });
+  return s + `</svg>`;
+}
+
+function routeCard(r, s) {
+  const body = s.headline === "frequent"
+    ? `<div class="big">+${s.excessWait.toFixed(1)} min <small>extra wait</small></div>
+       <div class="kv"><b>${s.regularity.toFixed(0)}%</b> evenly spaced</div>`
+    : `<div class="big" style="color:${pctClass(s.onTime)}">${s.onTime.toFixed(0)}% <small>on time</small></div>
+       <div class="kv">avg <b>${fmtMin(s.avgDelay)}</b></div>`;
+  return `<a class="card" href="#/route/${r.id}">
+    <span class="route-chip ${s.headline === "frequent" ? "freq" : ""}">${r.id}</span>
+    <div class="ends">${ends(r)}</div>
+    ${body}
+    <div class="kv"><b>${s.ghosts}</b> ghosts · <b>${s.cancelled}</b> cancelled</div>
+  </a>`;
+}
+
+function filteredRoutes(focus, q) {
+  const query = (q || "").trim().toLowerCase();
+  return ROUTES.filter(r => {
+    if (focus && focus !== "all" && !r.tags.includes(focus)) return false;
+    if (!query) return true;
+    return [r.id, r.long, r.a, r.b, ...r.tags].join(" ").toLowerCase().includes(query);
+  });
+}
+
+function homePage(params) {
+  const days = DAYS_COLLECTED;
+  const focus = params.get("focus") || "all";
+  const q = params.get("q") || "";
+  const sort = params.get("sort") || "ontime";
+  const list = filteredRoutes(focus, q);
+  const all = ROUTES.map(r => ({ r, both: cached(r, days) }));
+  const arrivals = all.reduce((a, x) => a + x.both.arrivals, 0);
+  const regional = all.reduce((a, x) => a + x.both.onTime, 0) / all.length;
+  const ghosts = all.reduce((a, x) => a + x.both.ghosts, 0);
+  const rows = list.map(r => {
+    const both = cached(r, days);
+    const s = both.in;
+    return { r, s, both, onTime: both.onTime, delay: both.avgDelay, ghosts: both.ghosts };
+  });
+  rows.sort((a, b) => sort === "delay" ? b.delay - a.delay : sort === "ghosts" ? b.ghosts - a.ghosts : a.onTime - b.onTime);
+  const worst = [...all].sort((a, b) => a.both.onTime - b.both.onTime).slice(0, 5);
+  const best = [...all].sort((a, b) => b.both.onTime - a.both.onTime).slice(0, 5);
+  const chips = FOCI.map(f => `<button class="chip ${f.id === focus ? "on" : ""}" data-focus="${f.id}">${f.label}</button>`).join("");
+  const table = rows.map(({ r, both }) => `<tr class="clickable" data-href="#/route/${r.id}">
+      <td><span class="route-chip ${both.in.headline === "frequent" ? "freq" : ""}" style="font-size:13px">${r.id}</span></td>
+      <td>${r.long}<div class="muted">${ends(r)}</div></td>
+      <td style="color:${pctClass(both.onTime)};font-weight:700">${both.onTime.toFixed(0)}%</td>
+      <td>${fmtMin(both.avgDelay)}</td>
+      <td>${both.ghosts}</td>
+      <td>${both.cancelled}</td>
+    </tr>`).join("");
+
+  return `
+    <h1>How reliable is your bus in Metro Vancouver?</h1>
+    <p class="sub">Every TransLink bus route, scored from ${arrivals.toLocaleString()} observed arrivals over ${days} days (Apr–Oct 2026).</p>
+    <div class="stats" style="margin-top:0">
+      <div class="stat"><div class="label">Routes tracked</div><div class="value">${ROUTES.length}</div><div class="note">of ~230 in the live feed</div></div>
+      <div class="stat"><div class="label">Regional on time</div><div class="value" style="color:${pctClass(regional)}">${regional.toFixed(0)}%</div><div class="note">−1 / +3 minute window</div></div>
+      <div class="stat"><div class="label">Ghost trips</div><div class="value">${ghosts.toLocaleString()}</div><div class="note">silent no-shows this period</div></div>
+      <div class="stat"><div class="label">Feed coverage</div><div class="value">${all[0].both.in.coverage.toFixed(1)}%</div><div class="note">hours with a healthy feed</div></div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>Least reliable</h2>
+        ${worst.map((x, i) => `<div class="kv"><span class="rank">${i + 1}.</span> <a href="#/route/${x.r.id}"><b>${x.r.id}</b> ${x.r.long}</a> · <b style="color:${pctClass(x.both.onTime)}">${x.both.onTime.toFixed(0)}%</b></div>`).join("")}
+      </div>
+      <div class="panel">
+        <h2>Most reliable</h2>
+        ${best.map((x, i) => `<div class="kv"><span class="rank">${i + 1}.</span> <a href="#/route/${x.r.id}"><b>${x.r.id}</b> ${x.r.long}</a> · <b style="color:${pctClass(x.both.onTime)}">${x.both.onTime.toFixed(0)}%</b></div>`).join("")}
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Rain vs dry days</h2>
+      <p class="kv">On days with ≥5 mm of rain, regional on-time drops from <b>${regional.toFixed(0)}%</b> to <b>${(regional - 6.4).toFixed(0)}%</b>. The 99, R4, and 145 lose the most.</p>
+    </div>
+    <div class="panel">
+      <div class="toolbar">
+        <input id="q" type="search" placeholder="Search 99, UBC, Hastings…" value="${q.replace(/"/g, "&quot;")}">
+      </div>
+      <div class="chips">${chips}</div>
+      <p class="kv">${list.length} route${list.length === 1 ? "" : "s"} · click a column to sort</p>
+      <table>
+        <thead><tr>
+          <th data-sort="ontime">Route</th><th>Name</th>
+          <th data-sort="ontime">On time</th><th data-sort="delay">Avg delay</th>
+          <th data-sort="ghosts">Ghosts</th><th>Cancelled</th>
+        </tr></thead>
+        <tbody>${table || `<tr><td colspan="6" class="muted">No routes match.</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div class="panel callout">
+      <div>Need a departure time? <a href="#/plan"><b>When should I leave?</b></a> · Watch buses move on the <a href="#/live"><b>live map</b></a>.</div>
+      <div class="status">Data last updated <span id="ago">0</span>s ago<span class="dot"></span></div>
+    </div>`;
+}
+
+function routePage(id, params) {
+  const r = routeById(id);
+  if (!r) return `<p>Unknown route. <a href="#/">Back to all routes</a></p>`;
+  const dir = params.get("dir") === "out" ? "out" : "in";
+  const days = Math.min(DAYS_COLLECTED, Number(params.get("days") || DAYS_COLLECTED));
+  const s = summary(r, dir, days);
+  const both = cached(r, DAYS_COLLECTED);
+  const stops = stopDelays(r, dir, days);
+  const busiestBunch = [...s.hrs].sort((a, b) => b.bunching - a.bunching)[0];
+  const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${label}</option>`;
+  const tags = r.tags.map(t => `<span class="tag">${t}</span>`).join("");
+  const peers = ROUTES.filter(x => x.tags.some(t => r.tags.includes(t)) && x.id !== r.id)
+    .map(x => ({ x, on: cached(x, DAYS_COLLECTED).onTime }))
+    .sort((a, b) => a.on - b.on);
+  const rank = [...ROUTES].map(x => ({ id: x.id, on: cached(x, DAYS_COLLECTED).onTime })).sort((a, b) => a.on - b.on);
+  const place = rank.findIndex(x => x.id === r.id) + 1;
+
+  const headStats = s.headline === "frequent"
+    ? `<div class="stat"><div class="label">Extra wait</div><div class="value">+${s.excessWait.toFixed(1)} min</div><div class="note">vs. the schedule's promise</div></div>
+       <div class="stat"><div class="label">Evenly spaced</div><div class="value">${s.regularity.toFixed(0)}%</div><div class="note">gaps within ±50% of scheduled</div></div>`
+    : "";
+
+  return `
+    <a class="back" href="#/">← All ${ROUTES.length} routes</a>
+    <div class="toolbar" style="margin-top:10px">
+      <span class="route-chip ${s.headline === "frequent" ? "freq" : ""}">${r.id}</span>
+      <h1 style="margin:0">${r.long}</h1>${tags}
+    </div>
+    <p class="sub" style="margin-bottom:10px">${ends(r)} · #${place} of ${ROUTES.length} for on-time</p>
+    <div class="toolbar">
+      <select id="dir">${opt("in", dir, dirLabel(r, "in"))}${opt("out", dir, dirLabel(r, "out"))}</select>
+      <select id="days">${opt(7, days, "Last 7 days")}${opt(30, days, "Last 30 days")}${opt(DAYS_COLLECTED, days, `All data (${DAYS_COLLECTED} days)`)}</select>
+      ${earlyBadge(days)}
+    </div>
+    <div class="stats">
+      ${headStats}
+      <div class="stat"><div class="label">On time</div><div class="value" style="color:${pctClass(s.onTime)}">${s.onTime.toFixed(0)}%</div>
+        <div class="note">regional median ${REGIONAL_MEDIAN_ON_TIME}%</div></div>
+      <div class="stat"><div class="label">Avg delay</div><div class="value">${fmtMin(s.avgDelay)}</div><div class="note">p90 ${fmtMin(s.p90)}</div></div>
+      <div class="stat"><div class="label">Ghost trips</div><div class="value">${s.ghosts}</div><div class="note">silent no-shows</div></div>
+      <div class="stat"><div class="label">Cancelled</div><div class="value">${s.cancelled}</div><div class="note">announced by TransLink</div></div>
+      <div class="stat"><div class="label">Bunching</div><div class="value">${s.bunching}</div><div class="note">most at ${fmtHour(busiestBunch.h)}</div></div>
+    </div>
+    <div class="panel">
+      <h2>By hour of day</h2>
+      <div class="legend">
+        <span><i style="background:var(--sched)"></i>Scheduled hours: avg delay</span>
+        <span><i style="background:var(--freq)"></i>Frequent hours (every ≤10 min): extra wait</span>
+        <span>Hover a bar for details</span>
+      </div>
+      ${hourlyChart(s.hrs)}
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>Delay along the route</h2>
+        ${stopChart(stops)}
+      </div>
+      <div class="panel">
+        <h2>Compared with similar routes</h2>
+        <p class="kv">Both directions, last ${DAYS_COLLECTED} days. This route averages <b>${both.onTime.toFixed(0)}%</b> on time.</p>
+        ${peers.slice(0, 5).map(p => `<div class="kv"><a href="#/route/${p.x.id}"><b>${p.x.id}</b> ${p.x.long}</a> · ${p.on.toFixed(0)}%</div>`).join("") || `<p class="kv">No peer routes in this set.</p>`}
+        <p class="kv" style="margin-top:12px">On rainy days this route falls to <b>${s.rainOnTime.toFixed(0)}%</b> on time.</p>
+        <p class="kv"><b>${s.trips.toLocaleString()}</b> trips and <b>${s.arrivals.toLocaleString()}</b> arrivals observed ${dirPhrase(r, dir)}.</p>
+      </div>
+    </div>
+    <div class="panel callout">
+      <div><a href="#/plan?route=${r.id}">Plan a trip on the ${r.id}</a> · <a href="#/live?routes=${r.id}">See it on the live map</a></div>
+    </div>`;
+}
+
+function planAdvice(r, stop, arriveBy, conf) {
+  const days = 60;
+  const rng = rngFor("plan", r.id, stop, arriveBy, conf);
+  const [hh, mm] = arriveBy.split(":").map(Number);
+  const arriveMin = hh * 60 + mm;
+  const gap = r.gap(Math.max(5, hh - 1));
+  const need = conf >= 95 ? 18 + rng() * 6 : conf >= 80 ? 10 + rng() * 5 : 6 + rng() * 4;
+  const recMin = arriveMin - Math.round(need + gap * 0.4);
+  const altMin = recMin + gap;
+  const fmt = m => `${String(Math.floor(((m % 1440) + 1440) % 1440 / 60)).padStart(2, "0")}:${String(((m % 1440) + 1440) % 1440 % 60).padStart(2, "0")}`;
+  const n = 40;
+  const recHit = Math.round(n * (conf >= 95 ? 0.93 + rng() * 0.05 : 0.8 + rng() * 0.1));
+  const altHit = Math.max(4, recHit - Math.round(8 + rng() * 8));
+  return { rec: fmt(recMin), alt: fmt(altMin), recHit, altHit, n, stop };
+}
+
+function planPage(params) {
+  const routeId = params.get("route") || "145";
+  const r = routeById(routeId) || ROUTES[0];
+  const stop = params.get("stop") || r.stops[0];
+  const arriveBy = params.get("arrive") || "08:30";
+  const conf = Number(params.get("conf") || 95);
+  const advice = planAdvice(r, stop, arriveBy, conf);
+  const opts = (list, cur, label) => list.map(x => `<option value="${x.id || x}" ${String(x.id || x) === String(cur) ? "selected" : ""}>${label(x)}</option>`).join("");
+  return `
+    <h1>When should I leave?</h1>
+    <p class="sub">Uses the last 60 weekdays of observed arrivals. Pick a confidence level: we recommend the latest bus that made it that often.</p>
+    <div class="panel">
+      <div class="toolbar">
+        <label>Route <select id="proute">${opts(ROUTES, r.id, x => x.id + " · " + x.long)}</select></label>
+        <label>From <select id="pstop">${opts(r.stops, stop, x => x)}</select></label>
+        <label>Arrive by <input id="parrive" type="time" value="${arriveBy}"></label>
+        <label>Confidence <select id="pconf">${[80, 90, 95].map(n => `<option ${n === conf ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      </div>
+      <p class="plan-result">Catch the <b>${advice.rec}</b> ${r.id} from ${advice.stop}.</p>
+      <p class="kv">It reached the destination by ${arriveBy} on <b>${advice.recHit} of ${advice.n}</b> recent weekdays (${Math.round(100 * advice.recHit / advice.n)}%).</p>
+      <p class="kv">The ${advice.alt} only made it <b>${advice.altHit} of ${advice.n}</b> times.</p>
+    </div>
+    <div class="panel">
+      <h2>Why this is not Google Maps</h2>
+      <p class="kv">Live apps tell you the next scheduled departure. This uses <b>what actually happened</b> on this route at this hour, so a 95% recommendation already includes typical delay and the occasional ghost trip.</p>
+    </div>`;
+}
+
+function liveBuses(focusIds) {
+  const want = focusIds ? new Set(focusIds.split(",").filter(Boolean)) : null;
+  const routes = ROUTES.filter(r => !want || want.has(r.id));
+  const nEach = routes.length > 12 ? 1 : 2;
+  const buses = [];
+  routes.forEach((r, ri) => {
+    const rng = rngFor("live", r.id);
+    for (let i = 0; i < nEach; i++) {
+      const t = (0.12 + rng() * 0.76 + i * 0.31) % 1;
+      const delay = Math.max(-1, r.base + (rng() - 0.3) * r.peak * 1.4);
+      buses.push({ r, t, delay, id: r.id + "-" + (100 + i) });
+    }
+  });
+  return buses;
+}
+
+function livePage(params) {
+  const routesQ = params.get("routes") || "";
+  const buses = liveBuses(routesQ);
+  const W = 980, H = 520;
+  // Schematic Metro Vancouver: water, land, labels, route traces.
+  const shown = [...new Set(buses.map(b => b.r))];
+  const posOn = (r, t) => {
+    const [[x1, y1], [x2, y2]] = r.xy;
+    return [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t];
+  };
+  const color = d => d <= 2 ? "var(--good)" : d <= 5 ? "var(--warn)" : "var(--bad)";
+  let dots = "";
+  buses.forEach(b => {
+    const [x, y] = posOn(b.r, b.t);
+    dots += `<g class="bus" data-href="#/route/${b.r.id}">
+      <circle cx="${x}" cy="${y}" r="8" fill="${color(b.delay)}" stroke="#fff" stroke-width="2">
+        <title>${b.r.id} #${b.id.split("-")[1]} · ${fmtMin(b.delay)}</title>
+      </circle>
+      <text x="${x}" y="${y - 12}" text-anchor="middle" fill="#1d2330" font-size="10" font-weight="700">${b.r.id}</text>
+    </g>`;
+  });
+  const paths = shown.map(r => {
+    const [[x1, y1], [x2, y2]] = r.xy;
+    const c = r.tags.includes("rapid") ? "#8a4fd8" : r.tags.includes("night") ? "#6b7385" : "#3b6fd8";
+    return `<path d="M ${x1} ${y1} L ${x2} ${y2}" fill="none" stroke="${c}" stroke-width="3" opacity=".4"/>`;
+  }).join("");
+  return `
+    <h1>Live map</h1>
+    <p class="sub">${buses.length} buses right now${routesQ ? ` on ${routesQ}` : " across featured corridors"}. Colour is current delay, refreshed from the last 60 seconds of stored positions — this page never calls TransLink.</p>
+    <div class="toolbar">
+      <button class="chip ${!routesQ ? "on" : ""}" data-live="">All corridors</button>
+      <button class="chip ${routesQ === "R5,145,144,143,135" ? "on" : ""}" data-live="R5,145,144,143,135">SFU</button>
+      <button class="chip ${routesQ === "99,R4,9,14,25,41,49" ? "on" : ""}" data-live="99,R4,9,14,25,41,49">UBC</button>
+      <button class="chip ${routesQ === "R1,R2,R3,R4,R5,R6" ? "on" : ""}" data-live="R1,R2,R3,R4,R5,R6">RapidBus</button>
+    </div>
+    <div class="map-wrap">
+      <svg viewBox="0 0 ${W} ${H}">
+        <rect width="${W}" height="${H}" fill="#d7e4f0"/>
+        <ellipse cx="80" cy="200" rx="90" ry="160" fill="#b9d4ea"/>
+        <path d="M 80 80 C 220 90, 280 140, 340 160 L 360 80 L 900 80 L 900 500 L 80 500 Z" fill="#e7eddd"/>
+        <text x="70" y="200" fill="#5a7a94">Strait of Georgia</text>
+        <text x="210" y="200" fill="#6b7385">Downtown</text>
+        <text x="380" y="230" fill="#6b7385">East Van</text>
+        <text x="520" y="300" fill="#6b7385">Burnaby</text>
+        <text x="680" y="120" fill="#6b7385">SFU</text>
+        <text x="130" y="285" fill="#6b7385">UBC</text>
+        <text x="760" y="290" fill="#6b7385">Surrey</text>
+        <text x="720" y="310" fill="#6b7385"></text>
+        <text x="780" y="400" fill="#6b7385">Langley</text>
+        <text x="430" y="400" fill="#6b7385">Richmond</text>
+        <text x="300" y="120" fill="#6b7385">North Shore</text>
+        ${paths}${dots}
+      </svg>
+    </div>
+    <div class="map-legend">
+      <span><i style="background:var(--good);width:10px;height:10px;border-radius:50%;display:inline-block"></i> on time (≤ +2 min)</span>
+      <span><i style="background:var(--warn);width:10px;height:10px;border-radius:50%;display:inline-block"></i> late</span>
+      <span><i style="background:var(--bad);width:10px;height:10px;border-radius:50%;display:inline-block"></i> very late</span>
+      <span>Hover a bus · click for the route card</span>
+    </div>`;
+}
+
+function aboutPage() {
+  return `<div class="about">
+    <h1>Methodology</h1>
+    <p class="sub">VanBus records every TransLink bus in Metro Vancouver and publishes honest reliability stats. SFU routes were the first public pages; the rest of the network uses the same pipeline.</p>
+    <div class="panel">
+      <h2>What we collect</h2>
+      <p>Trip updates and vehicle positions from TransLink's GTFS Realtime feeds, compared against the published GTFS schedule that was in effect that day. The website never calls TransLink — it only reads our database.</p>
+    </div>
+    <div class="panel">
+      <h2>Two kinds of service</h2>
+      <p>Each hour of each route is scored on its own. If buses are scheduled every <b>10 minutes or less</b>, riders don't use the timetable, so we measure <b>extra wait</b> and <b>even spacing</b>. Otherwise we measure <b>on-time performance</b>.</p>
+    </div>
+    <div class="panel">
+      <h2>Definitions</h2>
+      <ul>
+        <li><b>Delay</b>: observed arrival minus scheduled arrival at a stop.</li>
+        <li><b>On time</b>: between 1 minute early and 3 minutes late.</li>
+        <li><b>Extra wait</b>: average wait for a rider who shows up at a random moment, minus the wait the schedule promises.</li>
+        <li><b>Ghost trip</b>: scheduled, not cancelled, feed healthy for the whole window, yet no bus ever appeared.</li>
+        <li><b>Cancelled</b>: trip marked <code>CANCELED</code> in TransLink's real-time feed. Counted separately from ghosts.</li>
+        <li><b>Bunching</b>: a bus arriving less than 25% of the scheduled gap after the previous one.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h2>Open data</h2>
+      <p class="kv">CSV and JSON exports of daily route stats: <code>GET /api/export/routes?from&to</code> (wired in the real app; this demo has no backend).</p>
+      <p class="kv">Route and arrival data provided by TransLink. This page uses generated data only.</p>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const [path, query] = (location.hash.slice(1) || "/").split("?");
+  const params = new URLSearchParams(query || "");
+  const app = document.getElementById("app");
+  const m = path.match(/^\/route\/([^/?]+)/);
+  app.innerHTML = m ? routePage(m[1], params)
+    : path === "/about" ? aboutPage()
+    : path === "/plan" ? planPage(params)
+    : path === "/live" ? livePage(params)
+    : homePage(params);
+
+  document.querySelectorAll("[data-nav]").forEach(a => {
+    const name = a.dataset.nav;
+    const on = (name === "home" && (path === "/" || path === "")) || path === "/" + name;
+    a.classList.toggle("active", on);
+  });
+
+  if (m) {
+    const dir = document.getElementById("dir"), days = document.getElementById("days");
+    const update = () => { location.hash = `#/route/${m[1]}?dir=${dir.value}&days=${days.value}`; };
+    dir.onchange = days.onchange = update;
+  }
+  if (path === "/" || path === "") {
+    const q = document.getElementById("q");
+    const apply = (focus, sort, query) => {
+      const p = new URLSearchParams();
+      if (focus && focus !== "all") p.set("focus", focus);
+      if (sort && sort !== "ontime") p.set("sort", sort);
+      if (query) p.set("q", query);
+      location.hash = "#/" + (p.toString() ? "?" + p.toString() : "");
+    };
+    let t;
+    q.oninput = () => { clearTimeout(t); t = setTimeout(() => apply(params.get("focus") || "all", params.get("sort") || "ontime", q.value), 200); };
+    document.querySelectorAll("[data-focus]").forEach(b => b.onclick = () => apply(b.dataset.focus, params.get("sort") || "ontime", q.value));
+    document.querySelectorAll("th[data-sort]").forEach(th => th.onclick = () => apply(params.get("focus") || "all", th.dataset.sort, q.value));
+    document.querySelectorAll("tr[data-href]").forEach(tr => tr.onclick = () => { location.hash = tr.dataset.href; });
+  }
+  if (path === "/plan") {
+    const sync = () => {
+      const r = document.getElementById("proute").value;
+      location.hash = `#/plan?route=${r}&stop=${encodeURIComponent(document.getElementById("pstop").value)}&arrive=${document.getElementById("parrive").value}&conf=${document.getElementById("pconf").value}`;
+    };
+    document.getElementById("proute").onchange = () => {
+      location.hash = `#/plan?route=${document.getElementById("proute").value}&arrive=${document.getElementById("parrive").value}&conf=${document.getElementById("pconf").value}`;
+    };
+    document.getElementById("pstop").onchange = document.getElementById("parrive").onchange = document.getElementById("pconf").onchange = sync;
+  }
+  if (path === "/live") {
+    document.querySelectorAll("[data-live]").forEach(b => b.onclick = () => {
+      location.hash = b.dataset.live ? `#/live?routes=${b.dataset.live}` : "#/live";
+    });
+    document.querySelectorAll(".bus").forEach(g => g.onclick = () => { location.hash = g.dataset.href; });
+  }
+  window.scrollTo(0, 0);
+}
+
+let lastUpdate = Date.now();
+setInterval(() => {
+  const secs = Math.floor((Date.now() - lastUpdate) / 1000);
+  if (secs >= 30) lastUpdate = Date.now();
+  const el = document.getElementById("ago");
+  if (el) el.textContent = secs % 30;
+}, 1000);
+
+window.addEventListener("hashchange", render);
+render();
+</script>
+</body>
+</html>
