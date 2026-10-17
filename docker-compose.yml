@@ -1,0 +1,35 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: bus
+      POSTGRES_PASSWORD: bus
+      POSTGRES_DB: bus
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bus -d bus"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  collector:
+    build: ./backend
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/bus?reWriteBatchedInserts=true
+      DB_USER: bus
+      DB_PASSWORD: bus
+      TRANSLINK_API_KEY: ${TRANSLINK_API_KEY:-}
+      HEALTHCHECK_URL: ${HEALTHCHECK_URL:-}
+      ARCHIVE_DIR: /data/archive
+    volumes:
+      - ./data/archive:/data/archive
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
