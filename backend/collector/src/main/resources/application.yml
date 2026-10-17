@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: collector
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/bus?reWriteBatchedInserts=true}
+    username: ${DB_USER:bus}
+    password: ${DB_PASSWORD:bus}
+  task:
+    scheduling:
+      pool:
+        size: 4
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+collector:
+  api-key: ${TRANSLINK_API_KEY:}
+  trip-updates-url: https://gtfsapi.translink.ca/v3/gtfsrealtime
+  positions-url: https://gtfsapi.translink.ca/v3/gtfsposition
+  static-gtfs-url: https://gtfs-static.translink.ca/gtfs/google_transit.zip
+  # 720 trip-update polls + 240 position polls. Stays under the 1,000/day Open API cap.
+  daily-request-budget: 960
+  trip-update-interval-ms: 120000
+  position-interval-ms: 360000
+  http-timeout: 20s
+  healthcheck-url: ${HEALTHCHECK_URL:}
+  archive-dir: ${ARCHIVE_DIR:./data/archive}
+  archive-every: 10m
+  zone: America/Vancouver
