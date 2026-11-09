@@ -104,8 +104,9 @@ public class FeedPoller implements ApplicationRunner {
             }
         } catch (Exception e) {
             long latency = Instant.now().toEpochMilli() - started.toEpochMilli();
-            store.insertFetch(started, feedType, null, latency, null, null, e.getClass().getSimpleName() + ": " + e.getMessage());
-            fail(feedType, e.toString());
+            String reason = rootMessage(e);
+            store.insertFetch(started, feedType, null, latency, null, null, reason);
+            fail(feedType, reason);
         }
     }
 
@@ -135,6 +136,18 @@ public class FeedPoller implements ApplicationRunner {
         } catch (Exception e) {
             log.warn("Healthchecks ping failed: {}", e.toString());
         }
+    }
+
+    private static String rootMessage(Throwable error) {
+        Throwable root = error;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        if (message == null || message.isBlank()) {
+            return root.getClass().getSimpleName();
+        }
+        return root.getClass().getSimpleName() + ": " + message;
     }
 
     private void fail(String feedType, String reason) {

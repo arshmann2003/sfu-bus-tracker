@@ -2,11 +2,15 @@ package ca.sfu.bustracker.collector;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Repository
 public class RealtimeStore {
@@ -38,6 +42,7 @@ public class RealtimeStore {
                 entityCount, feedTimestamp == null ? null : Timestamp.from(feedTimestamp), error);
     }
 
+    @Transactional
     public void insertPositions(Instant feedTimestamp, List<DecodedFeed.VehicleFix> vehicles) {
         Timestamp ts = Timestamp.from(feedTimestamp);
         for (int i = 0; i < vehicles.size(); i += BATCH) {
@@ -70,9 +75,10 @@ public class RealtimeStore {
         }
     }
 
+    @Transactional
     public void applyTrips(Instant seenAt, List<DecodedFeed.TripSnapshot> trips) {
         Timestamp seen = Timestamp.from(seenAt);
-        List<Object[]> arrivals = new java.util.ArrayList<>();
+        List<Object[]> rows = collapseStops(trips, seen);
         for (DecodedFeed.TripSnapshot trip : trips) {
             if (trip.serviceDate() == null || trip.tripId() == null) {
                 continue;
@@ -90,11 +96,6 @@ public class RealtimeStore {
             for (DecodedFeed.StopPrediction stop : trip.stops()) {
                 if (sequences.length() > 0) sequences.append(',');
                 sequences.append(stop.stopSequence());
-                arrivals.add(new Object[]{
-                        trip.serviceDate(), trip.tripId(), stop.stopSequence(), stop.stopId(),
-                        stop.predictedArrival() == null ? null : Timestamp.from(stop.predictedArrival()),
-                        seen, trip.relationship()
-                });
             }
             if (sequences.length() > 0) {
                 jdbc.update("""
@@ -107,8 +108,8 @@ public class RealtimeStore {
                         """, trip.serviceDate(), trip.tripId(), sequences.toString());
             }
         }
-        for (int i = 0; i < arrivals.size(); i += BATCH) {
-            List<Object[]> chunk = arrivals.subList(i, Math.min(i + BATCH, arrivals.size()));
+        for (int i = 0; i < rows.size(); i += BATCH) {
+            List<Object[]> chunk = rows.subList(i, Math.min(i + BATCH, rows.size()));
             jdbc.batchUpdate("""
                     INSERT INTO stop_arrival
                         (service_date, trip_id, stop_sequence, stop_id, predicted_arrival, last_seen_at, schedule_relationship)
@@ -129,4 +130,28 @@ public class RealtimeStore {
             });
         }
     }
+
+    /**
+     * Keeps the last prediction for each stop. A GTFS-Realtime feed can list the same
+     * stop twice, and Postgres rejects {@code ON CONFLICT DO UPDATE} when one INSERT
+     * proposes that key more than once.
+     */
+    static List<Object[]> collapseStops(List<DecodedFeed.TripSnapshot> trips, Timestamp seen) {
+        Map<ArrivalKey, Object[]> arrivals = new LinkedHashMap<>();
+        for (DecodedFeed.TripSnapshot trip : trips) {
+            if (trip.serviceDate() == null || trip.tripId() == null || trip.canceled()) {
+                continue;
+            }
+            for (DecodedFeed.StopPrediction stop : trip.stops()) {
+                arrivals.put(new ArrivalKey(trip.serviceDate(), trip.tripId(), stop.stopSequence()), new Object[]{
+                        trip.serviceDate(), trip.tripId(), stop.stopSequence(), stop.stopId(),
+                        stop.predictedArrival() == null ? null : Timestamp.from(stop.predictedArrival()),
+                        seen, trip.relationship()
+                });
+            }
+        }
+        return new ArrayList<>(arrivals.values());
+    }
+
+    record ArrivalKey(LocalDate serviceDate, String tripId, int stopSequence) {}
 }
