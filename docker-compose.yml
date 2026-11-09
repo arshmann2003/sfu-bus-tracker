@@ -5,10 +5,25 @@ services:
       POSTGRES_USER: bus
       POSTGRES_PASSWORD: bus
       POSTGRES_DB: bus
+    # DBeaver on this machine. Not published on the local network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    shm_size: 512mb
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=30
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bus -d bus"]
       interval: 5s

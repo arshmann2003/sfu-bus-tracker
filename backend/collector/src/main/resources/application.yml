@@ -29,4 +29,5 @@ collector:
   healthcheck-url: ${HEALTHCHECK_URL:}
   archive-dir: ${ARCHIVE_DIR:./data/archive}
   archive-every: 10m
+  archive-retention: 14d
   zone: America/Vancouver

@@ -121,6 +121,11 @@ public class FeedPoller implements ApplicationRunner {
             String name = DateTimeFormatter.ISO_INSTANT.format(feedTimestamp).replace(":", "") + ".pb";
             Files.write(dir.resolve(name), body);
             lastArchive.put(feedType, feedTimestamp);
+            int removed = ArchiveRetention.deleteOlderThan(
+                    Path.of(props.getArchiveDir()), Instant.now().minus(props.getArchiveRetention()));
+            if (removed > 0) {
+                log.info("Removed {} archived feeds older than {}", removed, props.getArchiveRetention());
+            }
         } catch (Exception e) {
             log.warn("Could not archive {} feed: {}", feedType, e.toString());
         }

@@ -17,6 +17,7 @@ public class CollectorProperties {
     private String healthcheckUrl = "";
     private String archiveDir = "./data/archive";
     private Duration archiveEvery = Duration.ofMinutes(10);
+    private Duration archiveRetention = Duration.ofDays(14);
     private String zone = "America/Vancouver";
 
     public String getApiKey() { return apiKey; }
@@ -41,6 +42,8 @@ public class CollectorProperties {
     public void setArchiveDir(String archiveDir) { this.archiveDir = archiveDir; }
     public Duration getArchiveEvery() { return archiveEvery; }
     public void setArchiveEvery(Duration archiveEvery) { this.archiveEvery = archiveEvery; }
+    public Duration getArchiveRetention() { return archiveRetention; }
+    public void setArchiveRetention(Duration archiveRetention) { this.archiveRetention = archiveRetention; }
     public String getZone() { return zone; }
     public void setZone(String zone) { this.zone = zone; }
 
