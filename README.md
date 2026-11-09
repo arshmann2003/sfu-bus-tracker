@@ -201,10 +201,35 @@ One row per Vancouver day. The collector will not poll once `count` reaches 960.
 | day | date, primary key | |
 | count | int | requests already spent that day |
 
+## Java and Spring Boot
+
+Three Maven modules, Java 21, Spring Boot 3.5.6. There is no JPA. Both apps talk to Postgres with `JdbcTemplate` and SQL.
+
+`core` is a plain library. `GtfsTime` parses schedule times, including hours past 24. The Flyway files live here, in `db/migration`. `core` does not start a server.
+
+`collector` is a Spring Boot app. `CollectorApplication` turns on scheduling and configuration properties. `FeedPoller` uses `@Scheduled` for the two live feeds. `ScheduleLoader` uses `@Scheduled` with a cron at 04:15 Pacific, and it also runs once at startup. Settings such as the API key, URLs, and the 960 request budget are `@ConfigurationProperties` under `collector.*`. HTTP calls use Java’s `HttpClient`. Trip updates and positions are decoded with the GTFS Realtime protobuf library. The static zip is read with Apache Commons CSV. Writes go through `RealtimeStore`, and each batch of trips or positions is one `@Transactional` method. On startup, Flyway applies any new migration. Spring Boot Actuator exposes `GET /actuator/health` on port 8080.
+
+`api` is a second Spring Boot app, on port 8081. It does not depend on `core`, and it does not run Flyway. `RouteController` is a `@RestController`. `RouteService` loads rows through `StatsRepository`. `Reliability` is plain Java: the on-time window, the 10-minute frequent cutoff, extra wait, regularity, and bunching. JUnit tests cover those rules. Responses send `Cache-Control: max-age=30`.
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/api/status` | last poll, coverage in the last hour, days stored, arrival counts |
+| GET | `/api/routes?focus=sfu` | one card per SFU route |
+| GET | `/api/routes/{id}` | the full report for one route |
+| GET | `/api/routes/{id}/stats` | the headline numbers |
+| GET | `/api/routes/{id}/hourly` | one row per hour |
+| GET | `/api/routes/{id}/stops` | average delay at each stop |
+
+`from`, `to`, and `direction` are optional. The default range is the last 30 days through today in Vancouver. Any `focus` other than `sfu` returns an empty list.
+
+## The site and CI
+
+The site is React 19, React Router, and Vite. In development, Vite proxies `/api` to port 8081. The production build is static files. Caddy serves them and proxies `/api` to the API.
+
+GitHub Actions runs `mvn -B -f backend/pom.xml test` on every push and pull request. That is Java 21 on Temurin.
+
 ## Where it runs
 
 One EC2 instance in Calgary (`ca-west-1`): a `t4g.medium` with 4 GB of memory and a 12 GB disk. The site is [http://16.174.148.60/](http://16.174.148.60/).
 
 Docker runs the database and the collector together. They come back after a reboot. Postgres listens on localhost only. Caddy serves the site on port 80 and forwards `/api` to the API on localhost. The API does not poll TransLink. SSH is open to one address. The database port is not open to the internet.
-
-The collector and the API are Java 21 and Spring Boot. The site is React.
