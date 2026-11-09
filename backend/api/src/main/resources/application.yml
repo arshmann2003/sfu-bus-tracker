@@ -1,0 +1,12 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/bus}
+    username: ${DB_USER:bus}
+    password: ${DB_PASSWORD:bus}
+
+# Read-only. The collector owns Flyway and is the only writer.
+api:
+  zone: America/Vancouver
