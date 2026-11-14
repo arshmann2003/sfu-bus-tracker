@@ -19,6 +19,15 @@ function age(seconds) {
   return `${minutesAgo} min ago`;
 }
 
+function Spinner({ label }) {
+  return (
+    <span className="spinner" role="status">
+      <span className="spin" aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
 function Shell({ children }) {
   return (
     <>
@@ -66,10 +75,16 @@ function Home() {
         {status.data?.earlyData && <span className="badge">early data</span>}
       </h1>
       <p className="sub">
-        Based on {observed.toLocaleString()} completed stop arrivals over {days} day{days === 1 ? "" : "s"}.
+        {status.data == null && !status.error
+          ? <Spinner label="Counting completed stops…" />
+          : <>Based on {observed.toLocaleString()} completed stop arrivals over {days} day{days === 1 ? "" : "s"}. </>}
         A scheduled gap of 10 minutes or less is scored by extra wait. A wider gap is scored by on-time arrivals.
       </p>
+      {status.error && <p className="error">Could not load the arrival count: {status.error}</p>}
       {routes.error && <p className="error">Could not load routes: {routes.error}</p>}
+      {routes.data == null && !routes.error && (
+        <p className="loading"><Spinner label="Loading routes…" /></p>
+      )}
       <div className="cards">
         {cards.map((route) => <RouteCard key={route.id} route={route} />)}
       </div>
@@ -115,7 +130,9 @@ function RoutePage() {
   if (report.error) {
     return <Shell><p className="error">Could not load {id}: {report.error}</p></Shell>;
   }
-  if (!data) return <Shell><p className="muted">Loading {id}…</p></Shell>;
+  if (!data) {
+    return <Shell><p className="loading"><Spinner label={`Loading ${id}…`} /></p></Shell>;
+  }
   const summary = data.summary;
   const bars = data.hourly.filter((hour) => hour.observations > 0 || hour.excessWaitSec != null);
   const values = bars.map((hour) => Math.abs(summary.frequent ? (hour.excessWaitSec ?? 0) : (hour.avgDelaySec ?? 0)));

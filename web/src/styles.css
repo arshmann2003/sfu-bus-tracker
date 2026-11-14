@@ -62,6 +62,14 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 th { color: var(--muted); font-size: 12px; font-weight: 650; }
 .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.spinner { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.spin {
+  width: 14px; height: 14px; border-radius: 50%; flex: none;
+  border: 2px solid var(--line); border-top-color: var(--red);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading { margin: 4px 0 16px; }
 .error { background: #fff4f4; border: 1px solid #f0c8c8; padding: 12px 14px; border-radius: 10px; }
 .about p, .about li { max-width: 720px; }
 code { background: #eef1f5; padding: 1px 5px; border-radius: 4px; }
