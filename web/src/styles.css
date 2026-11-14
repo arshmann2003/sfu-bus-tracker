@@ -18,8 +18,8 @@ body {
 }
 a { color: inherit; text-decoration: none; }
 header { background: var(--red); color: #fff; }
-header .bar, main .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
-header .bar { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+header .topbar, main .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+header .topbar { display: flex; align-items: center; justify-content: space-between; height: 56px; }
 header nav a { margin-left: 16px; }
 header nav a.active { text-decoration: underline; }
 main { padding: 28px 0 64px; }

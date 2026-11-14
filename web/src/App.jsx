@@ -23,7 +23,7 @@ function Shell({ children }) {
   return (
     <>
       <header>
-        <div className="bar">
+        <div className="topbar">
           <Link to="/"><strong>SFU Bus Tracker</strong></Link>
           <nav>
             <NavLink to="/" end>Home</NavLink>
