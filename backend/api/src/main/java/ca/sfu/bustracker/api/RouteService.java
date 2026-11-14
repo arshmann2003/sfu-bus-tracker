@@ -45,8 +45,10 @@ public class RouteService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown route " + route);
         }
         int dir = direction == null ? -1 : direction;
-        RouteSummary summary = summarize(feed, meta, from, to, dir);
-        List<HourStat> hourly = hourly(feed, meta, from, to, dir);
+        List<StatsRepository.HourDelay> delays = repo.delays(feed, route, from, to, dir);
+        List<StatsRepository.HourGap> gaps = repo.gaps(feed, route, from, to, dir);
+        RouteSummary summary = summarize(feed, meta, from, to, dir, delays, gaps);
+        List<HourStat> hourly = hourly(meta, delays, gaps);
         List<StopStat> stops = repo.stops(feed, route, from, to, dir).stream()
                 .map(stop -> new StopStat(stop.stopId(), stop.name(), stop.sequence(),
                         round1(stop.avgDelaySec()), stop.observations()))
@@ -70,10 +72,15 @@ public class RouteService {
     }
 
     private RouteSummary summarize(long feed, RouteMeta meta, LocalDate from, LocalDate to, int direction) {
-        Long headway = Reliability.operatingHeadway(meta.starts());
-        boolean frequent = headway != null && Reliability.frequent(headway);
         List<StatsRepository.HourDelay> delays = repo.delays(feed, meta.shortName(), from, to, direction);
         List<StatsRepository.HourGap> gaps = repo.gaps(feed, meta.shortName(), from, to, direction);
+        return summarize(feed, meta, from, to, direction, delays, gaps);
+    }
+
+    private RouteSummary summarize(long feed, RouteMeta meta, LocalDate from, LocalDate to, int direction,
+                                   List<StatsRepository.HourDelay> delays, List<StatsRepository.HourGap> gaps) {
+        Long headway = Reliability.operatingHeadway(meta.starts());
+        boolean frequent = headway != null && Reliability.frequent(headway);
         int observations = delays.stream().mapToInt(StatsRepository.HourDelay::observations).sum();
         int onTime = delays.stream().mapToInt(StatsRepository.HourDelay::onTime).sum();
         double delaySum = delays.stream().mapToDouble(d -> d.avgDelaySec() * d.observations()).sum();
@@ -92,18 +99,18 @@ public class RouteService {
         );
     }
 
-    private List<HourStat> hourly(long feed, RouteMeta meta, LocalDate from, LocalDate to, int direction) {
+    private List<HourStat> hourly(RouteMeta meta, List<StatsRepository.HourDelay> delays, List<StatsRepository.HourGap> gaps) {
         Map<Integer, List<Long>> startsByHour = new LinkedHashMap<>();
         for (long start : meta.starts()) {
             int hour = (int) ((start / 3600) % 24);
             startsByHour.computeIfAbsent(hour, key -> new ArrayList<>()).add(start);
         }
         Map<Integer, StatsRepository.HourDelay> delayByHour = new LinkedHashMap<>();
-        for (StatsRepository.HourDelay delay : repo.delays(feed, meta.shortName(), from, to, direction)) {
+        for (StatsRepository.HourDelay delay : delays) {
             delayByHour.put(delay.hour(), delay);
         }
         Map<Integer, List<Long>> gapsByHour = new LinkedHashMap<>();
-        for (StatsRepository.HourGap gap : repo.gaps(feed, meta.shortName(), from, to, direction)) {
+        for (StatsRepository.HourGap gap : gaps) {
             gapsByHour.computeIfAbsent(gap.hour(), key -> new ArrayList<>()).add(gap.gapSec());
         }
         List<HourStat> hours = new ArrayList<>();
@@ -111,9 +118,9 @@ public class RouteService {
             Long headway = Reliability.operatingHeadway(startsByHour.getOrDefault(hour, List.of()));
             boolean frequent = headway != null && Reliability.frequent(headway);
             StatsRepository.HourDelay delay = delayByHour.get(hour);
-            List<Long> gaps = gapsByHour.getOrDefault(hour, List.of());
+            List<Long> hourGaps = gapsByHour.getOrDefault(hour, List.of());
             int observations = delay == null ? 0 : delay.observations();
-            if (observations == 0 && gaps.isEmpty()) {
+            if (observations == 0 && hourGaps.isEmpty()) {
                 continue;
             }
             Double onTimePct = null;
@@ -121,8 +128,8 @@ public class RouteService {
             Double excess = null;
             Double regularity = null;
             if (frequent) {
-                excess = round1(Reliability.excessWait(gaps, headway));
-                regularity = round1(Reliability.regularity(gaps, headway));
+                excess = round1(Reliability.excessWait(hourGaps, headway));
+                regularity = round1(Reliability.regularity(hourGaps, headway));
             } else if (delay != null && observations > 0) {
                 onTimePct = round1(100.0 * delay.onTime() / observations);
                 avgDelay = round1(delay.avgDelaySec());
