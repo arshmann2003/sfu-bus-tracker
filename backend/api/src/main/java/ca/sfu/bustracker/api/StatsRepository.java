@@ -128,28 +128,26 @@ public class StatsRepository {
 
     public List<StopDelay> stops(long feedId, String route, LocalDate from, LocalDate to, int direction) {
         return jdbc.query("""
-                SELECT s.name, st.stop_id, MIN(st.stop_sequence) AS seq,
+                SELECT s.name, sa.stop_id, MIN(sa.stop_sequence) AS seq,
                        AVG(EXTRACT(EPOCH FROM (
                            sa.observed_arrival - (
                                (sa.service_date::timestamp + make_interval(secs => st.arrival_secs))
                                AT TIME ZONE 'America/Vancouver'
                            )
                        ))) AS avg_delay,
-                       COUNT(sa.observed_arrival) AS n
-                FROM stop_time st
-                JOIN trip t ON t.feed_version_id = st.feed_version_id AND t.trip_id = st.trip_id
+                       COUNT(*) AS n
+                FROM stop_arrival sa
+                JOIN trip t ON t.trip_id = sa.trip_id AND t.feed_version_id = ?
                 JOIN route r ON r.feed_version_id = t.feed_version_id AND r.route_id = t.route_id
-                JOIN stop s ON s.feed_version_id = st.feed_version_id AND s.stop_id = st.stop_id
-                LEFT JOIN stop_arrival sa
-                    ON sa.trip_id = st.trip_id
-                   AND sa.stop_sequence = st.stop_sequence
-                   AND sa.observed_arrival IS NOT NULL
-                   AND sa.service_date BETWEEN ? AND ?
-                WHERE st.feed_version_id = ?
-                  AND r.short_name = ?
+                JOIN stop_time st ON st.feed_version_id = t.feed_version_id
+                    AND st.trip_id = sa.trip_id AND st.stop_sequence = sa.stop_sequence
+                JOIN stop s ON s.feed_version_id = t.feed_version_id AND s.stop_id = sa.stop_id
+                WHERE r.short_name = ?
+                  AND sa.observed_arrival IS NOT NULL
+                  AND st.arrival_secs IS NOT NULL
+                  AND sa.service_date BETWEEN ? AND ?
                   AND (? = -1 OR t.direction_id = ?)
-                GROUP BY s.name, st.stop_id
-                HAVING COUNT(sa.observed_arrival) > 0
+                GROUP BY s.name, sa.stop_id
                 ORDER BY seq
                 """, (rs, row) -> new StopDelay(
                 rs.getString("stop_id"),
@@ -157,7 +155,7 @@ public class StatsRepository {
                 rs.getInt("seq"),
                 rs.getDouble("avg_delay"),
                 rs.getInt("n")
-        ), Date.valueOf(from), Date.valueOf(to), feedId, route, direction, direction);
+        ), feedId, route, Date.valueOf(from), Date.valueOf(to), direction, direction);
     }
 
     public List<DirectionRow> directions(long feedId, String route) {
